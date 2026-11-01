@@ -11,6 +11,8 @@
     
     <!-- Memuat library Scanner QR Code / Barcode -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" type="text/javascript"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <!-- Memuat Font Inter dari Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -521,14 +523,28 @@
 
                         if (jamMasukUI) jamMasukUI.innerText = jamFormat;
                         if (jamPulangUI) jamPulangUI.innerText = "--:--"; 
-                        showToast("Absen Masuk Berhasil!", `Tercatat pukul ${jamFormat}`);
+                        // 1. TAMBAHKAN GETAR ABSEN MASUK DI SINI (Getar cepat 2 kali)
+                        if ("vibrate" in navigator) navigator.vibrate([100, 50, 100]);
+                        Swal.fire({
+                        icon: 'success',
+                        title: 'Absen Masuk Berhasil!',
+                        text: `Tercatat pukul ${jamFormat}`,
+                        showConfirmButton: false,
+                        timer: 3000
+                        });
                         
                     } else {
                         // KONDISI 2: Ada tiket gantung -> LAKUKAN ABSEN PULANG
                         const selisihMenit = Math.floor((now - tiketGantung.timestamp_masuk) / (1000 * 60));
                         
                         if (selisihMenit < 15) {
-                            showToast("Tunggu Dulu!", "Beri jeda minimal 15 menit untuk absen pulang.");
+                            Swal.fire({
+                        icon: 'warning',
+                        title: 'Tunggu Dulu!',
+                        text: 'Beri jeda minimal 15 menit untuk absen pulang.',
+                        confirmButtonColor: '#d33',
+                        confirmButtonText: 'Oke'
+                         });
                         } else {
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'absensi', tiketGantung.id);
                             await updateDoc(docRef, {
@@ -537,7 +553,15 @@
                             });
                             
                             if (jamPulangUI) jamPulangUI.innerText = jamFormat;
-                            showToast("Absen Pulang Berhasil!", `Hati-hati di jalan! Tercatat pukul ${jamFormat}`);
+                            // 2. TAMBAHKAN GETAR ABSEN PULANG DI SINI (Getar 1 kali panjang)
+                            if ("vibrate" in navigator) navigator.vibrate([300]);
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Absen Pulang Berhasil!',
+                                text: `Hati-hati di jalan! Tercatat pukul ${jamFormat}`,
+                                showConfirmButton: false,
+                                timer: 3000
+                            });         
                         }
                     }
                 } catch (error) {
@@ -727,11 +751,26 @@
 
         // --- EXPORT EXCEL ---
         document.getElementById('btn-export-excel').addEventListener('click', () => {
-            const dataUntukExport = window.dataAbsenGlobal || currentLogsData || [];
-            if (dataUntukExport.length === 0) {
-                alert("Belum ada data untuk di-export!");
-                return;
-            }
+    // 1. Ambil nilai filter yang sedang aktif di layar
+    const inputTanggal = document.getElementById('filter-date')?.value;
+    
+    // 2. Saring data sesuai filter tanggal & divisi yang dipilih
+    let dataUntukExport = (window.dataAbsenGlobal || []).filter(log => {
+        let cocokTanggal = true;
+        if (inputTanggal && log.tanggal) {
+            cocokTanggal = (log.tanggal === inputTanggal);
+        }
+        let cocokDivisi = true;
+        if (typeof divisiAktif !== 'undefined' && divisiAktif !== 'Semua') {
+            cocokDivisi = (log.divisi === divisiAktif);
+        }
+        return cocokTanggal && cocokDivisi;
+    });
+
+    if (dataUntukExport.length === 0) {
+        alert("Tidak ada data yang sesuai filter untuk di-export!");
+        return;
+    }
             const wb = XLSX.utils.book_new();
             const daftarDivisi = [...new Set(dataUntukExport.map(log => log.divisi || 'Lainnya'))];
 
@@ -755,10 +794,22 @@
                 ws['!cols'] = [{wch:5}, {wch:12}, {wch:15}, {wch:30}, {wch:18}, {wch:12}, {wch:12}];
                 XLSX.utils.book_append_sheet(wb, ws, divisi);
             });
-            const dateNow = new Date();
-            const hariIni = String(dateNow.getDate()).padStart(2, '0') + '-' + String(dateNow.getMonth() + 1).padStart(2, '0') + '-' + dateNow.getFullYear();
-            XLSX.writeFile(wb, `Rekap_Absensi_JAYANTI_${hariIni}.xlsx`);
-        });
+            // GANTI MENJADI INI:
+const inputTanggalFile = document.getElementById('filter-date')?.value;
+let labelTanggal = "";
+
+if (inputTanggalFile) {
+    // Jika filter diisi (misal: 2026-10-27), ubah nama file jadi 27-10-2026
+    const parts = inputTanggalFile.split('-');
+    labelTanggal = `${parts[2]}-${parts[1]}-${parts[0]}`;
+} else {
+    // Jika kalender kosong (tarik semua data), pakai tanggal hari ini
+    const dateNow = new Date();
+    labelTanggal = String(dateNow.getDate()).padStart(2, '0') + '-' + String(dateNow.getMonth() + 1).padStart(2, '0') + '-' + dateNow.getFullYear() + "_SemuaData";
+}
+
+XLSX.writeFile(wb, `Rekap_Absensi_JAYANTI_${labelTanggal}.xlsx`);
+         });
     </script>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
